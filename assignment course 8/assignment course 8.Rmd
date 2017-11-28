@@ -1,0 +1,136 @@
+---
+title: "prediction assignment"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning=FALSE)
+
+```
+
+## 1. Executive summary
+For this assignment the data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants are used. The goal of this assignment is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. I have analysed 3 models. Random Forest delivered the lowest out of sample error. Random Forest is therefor used to predict the 20 different test cases.
+
+## 2. Used packages
+The following packages are used for this assignment.
+```{r, echo =TRUE}
+library(AppliedPredictiveModeling)
+library(caret)
+library(randomForest)
+library(rattle)
+library(rpart.plot)
+```
+
+## 3. Data
+### 3.1 Used data 
+The data for this assignment come from this source: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har.
+
+The training data for this project are available here:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+### 3.1 Read data
+```{r, echo=TRUE}
+training <- read.csv("pml-training.csv", na.strings = c("NA", ""))
+training <- training[, colSums(is.na(training)) == 0]
+testing <- read.csv("pml-testing.csv", na.strings = c("NA", ""))
+testing <- testing[, colSums(is.na(testing)) == 0]
+```
+
+### 3.2 Cleaning the data
+```{r, echo=TRUE}
+dim(training)
+dim(testing)
+training_nw <- training[, -c(1:7)]
+testing_nw <- testing[, -c(1:7)]
+```
+The first 7 columns are not relevant for the assignment and are therefor deleted from the dataset. So 53 variables will be used to select a model.
+
+### 3.3 Data Partitioning
+The clean training data is split into training data (subtrain1) and test data (subtrain2). 
+```{r, echo=TRUE}
+set.seed(95014) 
+inTrain = createDataPartition(training_nw$classe, p=0.7, list = FALSE)
+subtrain1 = training_nw[inTrain,]
+subtrain2 = training_nw[-inTrain,]
+```
+
+## 4. Selecting model
+
+### 4.1 Lineair Discriminant Analysis
+Firstly build a LDA model on dataset subtrain1. Secondly use this model to predict on the testset subtrain2. This is to test how the model works for a test data set.
+```{r, echo=TRUE}
+# Build LDA model using training dataset (subtrain1)
+modFit_LDA <- train(classe ~., data = subtrain1, method = "lda")
+# Use LDA model to predict on test data (subtrain2)
+LDA_pred.test <- predict(modFit_LDA, subtrain2)
+# Determine confusion matrix
+confM_LDA <- confusionMatrix(subtrain2$classe, LDA_pred.test)
+print(confM_LDA)
+# Calculcate out of sample error
+out_of_sample_error_LDA <- 1-confM_LDA$overall[1]
+
+```
+The out of sample error of the LDA model is `r round(out_of_sample_error_LDA,3)`.
+
+### 4.2 Decision Tree
+Firstly build a Decision Tree model on dataset subtrain1. Secondly use this model to predict on the testset subtrain2. This is to test how the model works for a test data set.
+```{r, echo=TRUE}
+# Build Decision Tree model using training dataset (subtrain1)
+modFit_DT<- train(classe ~ . , method = "rpart", data = subtrain1)
+# Make a plot of the model
+rattle::fancyRpartPlot(modFit_DT$finalModel)
+# Use Decision Tree model to predict on test data (subtrain2)
+DT_pred.test <- predict(modFit_DT, subtrain2)
+# Determine confusion matrix
+confM_DT <- confusionMatrix(subtrain2$classe,DT_pred.test)
+print(confM_DT)
+# Calculcate out of sample error
+out_of_sample_error_DT <- 1-confM_DT$overall[1]
+```
+The out of sample error of the Decision Tree model is `r round(out_of_sample_error_DT,3)`.
+
+### 4.3 Random Forest
+Firstly build a Random Forest model on dataset subtrain1. Secondly use this model to predict on the testset subtrain2. This is to test how the model works for a test data set.
+```{r, echo=TRUE}
+# Build Random Forest model using training dataset (subtrain1)
+modFit_RF <- randomForest(classe ~ . , data = subtrain1)
+# Use Random Forest model to predict on test data (subtrain2)
+RF_pred.test <- predict(modFit_RF, subtrain2)
+# Determine confusion matrix
+confM_RF <- confusionMatrix(subtrain2$classe,RF_pred.test )
+print(confM_RF)
+# Calculcate out of sample error
+out_of_sample_error_RF <- 1-confM_RF$overall[1]
+```
+The out of sample error of the Random Forest model is `r round(out_of_sample_error_RF,3)`.
+
+For the model above all the variables have been used. What happens to the out of sample error if only the top 6 variables have been taken into account?
+
+#### 4.4 Importance of the variables
+```{r, echo=TRUE}
+varImpPlot(modFit_RF)
+```
+
+The top 6 variables are:  roll_belt, yaw_belt, pitch_forearm , magnet_dumbell_z, pitch_belt and magnet_dumbell_y.
+
+```{r, echo=TRUE}
+modFit_RF_6 <- randomForest(factor(classe) ~ roll_belt+yaw_belt+pitch_forearm +magnet_dumbbell_z + pitch_belt+ magnet_dumbbell_y , data = subtrain1 )
+RF_pred.test_6 <- predict(modFit_RF_6, subtrain2)
+confM_RF_6 <- confusionMatrix(subtrain2$classe,RF_pred.test_6 )
+print(confM_RF_6)
+out_of_sample_error_RF_6 <- 1-confM_RF_6$overall[1]
+```
+The out of sample error of the Random Forest model based on only top 6 variables is `r round(out_of_sample_error_RF_6,3)`.
+Even with only top 6 of the variables Random Forest delivers the lowerest out of sample error comparing to LDA model and Decision Tree model.
+
+## 5. Conclusion
+Random Forest model has the lowest out of sample error. This model is used to predict the 20 different test cases.
+
+### 5.1 Prediction of 20 different test cases.
+```{r, echo=TRUE}
+RF_pred.test2 <- predict(modFit_RF, testing_nw)
+RF_pred.test2
+```
